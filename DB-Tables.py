@@ -114,6 +114,8 @@ def add_record(table_name, record_fields, record_references, record_values):
     add_attributes(table_name, l)
     return True
         
+        
+        
 #create_tables()
 #add_DataFrame(df)
 #cursor.execute("DROP TABLE Part CASCADE")
