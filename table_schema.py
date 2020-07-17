@@ -7,6 +7,24 @@ Created on Thu Jul 16 13:44:25 2020
 
 ###COMMANDS TO CREATE THE TABLES
 
+test_1_tbl_command = ("""
+                      CREATE TABLE test_1 (
+                      ID UUID PRIMARY KEY,
+                      WORD varchar,
+                      NUMBER int
+                      )
+                      """
+                        )
+
+test_2_tbl_command = ("""
+                      CREATE TABLE test_2 (
+                      ID UUID PRIMARY KEY,
+                      WORD varchar,
+                      NUMBER int,
+                      Test_ref UUID references test_1(ID)
+                      )
+                      """)
+
 users_tbl_command = ("""
                    CREATE TABLE users (
                    ID UUID PRIMARY KEY,
@@ -95,7 +113,13 @@ Part_tbl_command = ("""
                    )
                    """)
                    
-all_tbl_commands = [users_tbl_command,
+all_tbl_commands = [
+                    ##tests
+                    test_1_tbl_command,
+                    test_2_tbl_command,
+                    ##
+        
+                    users_tbl_command,
                     NC_FILE_tbl_command,
                     CAM_tbl_command,
                     CAD_tbl_command,
@@ -104,7 +128,7 @@ all_tbl_commands = [users_tbl_command,
                     #more tables can be added here
                        ]
         
-table_names = ["users", "NC_file", "CAM", "CAD", "Material" "Part"]
+table_names = ["test_1", "test_2", "users", "NC_file", "CAM", "CAD", "Material", "Part"]
 
 def __make_table_size_dictionary():
     """makes a dictionary of the form dictionary of the form {"users": 10, "NC_file": 8, ...}"""
