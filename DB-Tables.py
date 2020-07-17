@@ -11,6 +11,7 @@ import psycopg2
 import sys
 
 
+
 tree = etree.parse("test_user.xml") #load file
 tree.xinclude()   
 
