@@ -16,7 +16,7 @@ import table_schema
 
 table_sizes = table_schema.table_sizes_dictionary
                  
-tree = etree.parse("xml_files/test_2_b.xml") #load filed
+tree = etree.parse("xml_files/test_2.xml") #load filed
 tree.xinclude()             
 
 root = tree.getroot()
@@ -41,29 +41,28 @@ print("You are connected to - ", record,"\n")
 def create_tables():   
     cursor.execute(table_schema.test_1_tbl_command)
     cursor.execute(table_schema.test_2_tbl_command)
-    
-    
 #### uncommenting the for expression below would create all the tables within the DataBase
 #    for command in table_schema.all_tbl_commands:
 #        cursor.execute(command)
+    
         
 def add_attributes(table_name, lst_of_attributes):
     cursor.execute("SET DateStyle to European")
     try:
         in_str = ','.join(['%s'] * len(lst_of_attributes)) # This will generate a string '%s,%s,%s...', so that the attributes can be passed
         query = "INSERT INTO {} VALUES ({})".format(table_name, in_str)
-        cursor.execute(query, lst_of_attributes)
+        cursor.execute(query, lst_of_attributes) #Executes the actual query in SQL
     except Exception:
         print("ERROR: ILLEGAL VALUE - Users Table")
-        print(sys.exc_info()[1])
+        print(sys.exc_info()[1]) #Shows the error message
         
 def add_DataFrame(df, root):
     table_name = df[0][0]
     if table_name == "user":
         table_name = "users"
-    record_fields = df[0].tolist()
-    record_references = df[1].tolist()
-    record_values = df[2].tolist()
+    record_fields = df[0].tolist() #get list of fields
+    record_references = df[1].tolist() #get list
+    record_values = df[2].tolist() #get list of values
     add_record(table_name, record_fields, record_references, record_values)
 
 def reference_ID_and_subroot(file_path):
@@ -98,11 +97,11 @@ def add_record(table_name, record_fields, record_references, record_values):
             elif "refid" in attribute:
                 file_path = attribute["refid"]
                 if (not reference_exists(file_path)): #check if the reference already exists in table
-                      sub_tree = etree.parse(file_path)
+                      sub_tree = etree.parse(file_path) #if not, add the data within the file being referred to
                       sub_tree.xinclude()
                       sub_root = sub_tree.getroot()
-                      df = DataFrame.objectify_root(sub_root)
-                      add_DataFrame(df, sub_root) #if so, add the data within the file being referred to
+                      df = DataFrame.objectify_root(sub_root) #make a Dataframe for the data to be added
+                      add_DataFrame(df, sub_root) 
                 lst_of_attributes.append(reference_ID_and_subroot(file_path)[0]) #add the ID
                 if (len(lst_of_attributes) == table_sizes[table_name]):
                     return lst_of_attributes
