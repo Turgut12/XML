@@ -11,17 +11,21 @@ from psycopg2 import sql
 import psycopg2
 import sys
 import table_schema
-
+from pprint import pprint #used for debugging
 
 
 table_sizes = table_schema.table_sizes_dictionary
                  
-tree = etree.parse("xml_files/test_2.xml") #load filed
-tree.xinclude()             
+file_path = "xml_files/test_2.xml"
 
-root = tree.getroot()
 
-df = DataFrame.objectify_root(root)
+###the next 4 lines could be removed, they're used to see the DataFrame formed with the root.
+###DataFrames are formed within the procedure "add_file"
+tree = etree.parse(file_path) #load file
+tree.xinclude() #Xinclude other files
+root = tree.getroot() 
+df = DataFrame.objectify_root(root) #make DataFrame 
+####
 
 connection = psycopg2.connect(user = "student-user",
                               password = "MiCLAD2020",
@@ -56,22 +60,29 @@ def add_attributes(table_name, lst_of_attributes):
         print("ERROR: ILLEGAL VALUE - Users Table")
         print(sys.exc_info()[1]) #Shows the error message
         
-def add_DataFrame(df, root):
+def add_file(file_path):
+    
+    tree = etree.parse(file_path) #load file
+    tree.xinclude() #Xinclude other files
+    root = tree.getroot() 
+    df = DataFrame.objectify_root(root) #make DataFrame 
+    
+    
     table_name = df[0][0]
     if table_name == "user":
         table_name = "users"
     record_fields = df[0].tolist() #get list of fields
     record_references = df[1].tolist() #get list
     record_values = df[2].tolist() #get list of values
-    add_record(table_name, record_fields, record_references, record_values)
+    return add_record(record_fields, record_references, record_values)
 
 def reference_ID_and_subroot(file_path):
     sub_tree = etree.parse(file_path)
     sub_root = sub_tree.getroot()
-    if sub_root == "user":
+    if sub_root == "user": #the table name "user" is Illegal, and so we have to use the name "users" instead
         sub_root = "users"
     df = DataFrame.objectify_root(sub_root)
-    ID = df[2][1]
+    ID = df[2][1] #the index of the ID within the DataFrame is [2][1]
     return [ID, sub_root]
 
 def reference_exists(file_path):
@@ -81,60 +92,91 @@ def reference_exists(file_path):
     cursor.execute(sql.SQL("select exists(select 1 from {} where ID = (%s))").format(sql.Identifier(sub_root.tag)), [ID])
     boolean = cursor.fetchall()[0][0] #fetchall returns a list of tuples. We have to dereference twice to get the boolean
     return boolean
-     
-def add_record(table_name, record_fields, record_references, record_values):  
-    def get_list_of_attributes():
+
+def add_record(record_fields, record_references, record_values):
+    all_records = preprocess_DataFrame(record_fields, record_references, record_values)
+    
+    def get_attributes(record):
+        record.pop(0) #the first element contains the table name, and no attributes. Therefore it must be popped
         lst_of_attributes = []
-        #indx = 0 (IGNORE INDX VAR FOR NOW)
-        for field, attribute, value in zip(record_fields, record_references, record_values):
-            #indx = indx + 1
-            
-            if value:
+        for field, attribute, value in record:
                 lst_of_attributes.append(value)
-                if (len(lst_of_attributes) == table_sizes[table_name]):
-                    return lst_of_attributes
+        return lst_of_attributes
                 
-            elif "refid" in attribute:
-                file_path = attribute["refid"]
-                if (not reference_exists(file_path)): #check if the reference already exists in table
-                      sub_tree = etree.parse(file_path) #if not, add the data within the file being referred to
-                      sub_tree.xinclude()
-                      sub_root = sub_tree.getroot()
-                      df = DataFrame.objectify_root(sub_root) #make a Dataframe for the data to be added
-                      add_DataFrame(df, sub_root) 
-                lst_of_attributes.append(reference_ID_and_subroot(file_path)[0]) #add the ID
-                if (len(lst_of_attributes) == table_sizes[table_name]):
-                    return lst_of_attributes
-                
-#            elif "fileName" in attribute: #branch for Xincluded records
-#                add_record(field, record_fields[indx:], record_references[indx:], record_values[indx:]) #add the Xincluded record
-#                attribute_to_skip = table_sizes[record_fields[0]]
-#                while(attribute_to_skip): #the recursive call will take care of adding the Xincluded record, the parent has to skip the attributes
-#                    print("skipping attributes")
-#                    next(triplets)
-#                    indx = indx + 1
-#                    attribute_to_skip = attribute_to_skip - 1          
-                    
-    l = get_list_of_attributes()
-    add_attributes(table_name, l)
+    for record in all_records:
+        table_name = record[0][0]
+        attributes = get_attributes(record)
+        add_attributes(table_name, attributes)
     return True
+                
+            
+        
+def preprocess_DataFrame(record_fields, record_references, record_values):
+    print("starting")
+    all_records = []
+    def look_for_record():
+        nmbr_of_found_attributes = 0
+        current_field_tag = record_fields[0]
+        indx = 0
+        current_record = []
+        for field, attribute, value in zip(record_fields, record_references, record_values):
+            indx = indx + 1
+            if field in table_schema.table_names: #does the field refer to a new record?
+                current_field_tag = field #if so, change the field_tag
+                nmbr_of_found_attributes = 0  #we start looking for the attributes of the record, and thus have to start over at 0
+                current_record = [[current_field_tag, [], None]] #initialize the record
+                
+            elif "refid" in attribute or value: #check if we found an attribute
+                nmbr_of_found_attributes = nmbr_of_found_attributes + 1
+                if "refid" in attribute:
+                    file_path = attribute["refid"]
+                    if (not reference_exists(file_path)): #check if the file being refered to is already in the database
+                        add_file(file_path) #add file recursively
+                        
+                if "refid" in attribute:
+                      current_record.append([field, [], reference_ID_and_subroot(file_path)[0]]) #add foreign key to record
+                else: current_record.append([field, attribute, value]) #otherwise, add value to record
+                
+                if (nmbr_of_found_attributes == table_sizes[current_field_tag]): #check if we found all attributes of a record
+                    
+                    #the body of the if-test will cut the found record from record_fields, record_references and record_values
+                    #and return the found record, so that it can be added to the database
+                    first_attribute_indx = indx - table_sizes[current_field_tag] - 1 
+                    del record_fields [first_attribute_indx:indx] #delete from the index of first attribute, to the index of last attribute
+                    del record_references [first_attribute_indx:indx]
+                    del record_values [first_attribute_indx:indx]
+                    return current_record
+        return False
+                
+    while (record_fields): 
+        record = look_for_record() #we keep looking for records and appending them, until record_fields are empty
+        if record:
+            all_records.append(record)
+        else: break #false was returned out of look_for_record()
+
+    #pprint(all_records) #uncomment this line to pretty print all_records
+    return all_records
+
+                    
         
         
         
 create_tables()
-add_DataFrame(df, root)
+add_file("xml_files/test_2.xml")
 
 print('\n')
 print("TEST_1 contents!!!")
 cursor.execute("SELECT * FROM test_1")
-print(cursor.fetchall())
+pprint(cursor.fetchall())
 print('\n')
 print("TEST_2 contents!!!")
 cursor.execute("SELECT * FROM test_2")
-print(cursor.fetchall())
+pprint(cursor.fetchall())
 
-#cursor.execute("DROP TABLE test_1 CASCADE")
-#cursor.execute("DROP TABLE test_2 CASCADE")
+cursor.execute("DROP TABLE test_1 CASCADE")
+cursor.execute("DROP TABLE test_2 CASCADE")
+    
+
 connection.commit()
     
 
