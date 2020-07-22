@@ -21,7 +21,7 @@ test_2_tbl_command = ("""
                       ID UUID PRIMARY KEY,
                       WORD varchar,
                       NUMBER int,
-                      Test_ref UUID references test_1(ID)
+                      TEST_REF UUID references test_1(ID)
                       )
                       """)
 
@@ -130,12 +130,16 @@ all_tbl_commands = [
         
 table_names = ["test_1", "test_2", "users", "NC_file", "CAM", "CAD", "Material", "Part"]
 
-def __make_table_size_dictionary():
-    """makes a dictionary of the form dictionary of the form {"users": 10, "NC_file": 8, ...}"""
-    name_command_dict = {
+name_command_dict = name_command_dict = {
             table_name: table_command for table_name, table_command in zip(table_names, all_tbl_commands)
             } #dictionary of the form {"users": users_tbl_command, ...}
-    
+
+def table_attributes(table_name, field):
+    table_command = name_command_dict[table_name]
+    return (field in table_command)
+
+def __make_table_size_dictionary():
+    """makes a dictionary of the form dictionary of the form {"users": 10, "NC_file": 8, ...}"""
     def count_fields(table_creation_command):
         return table_creation_command.count(',') + 1 #count the number of commas in a table_creation_command, for example users_tbl_command
                                                      #we add one to this number because there is 1 more field than the number of commas
